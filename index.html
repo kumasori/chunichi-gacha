@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>中日勝率ガチャ</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=DotGothic16&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap">
+<style>
+/* Layout: 夜のナイター電光掲示板。1カラム、スコアボード→結果→ボタン→成績の順。ナゴヤドームの夜空ブルーに金の勝利、珊瑚の敗北。 */
+:root {
+  --night: #070f26;
+  --panel: #0e1c42;
+  --line: #243a78;
+  --fg: #eef3ff;
+  --muted: #98a9d6;
+  --dragon: #2a73ff;
+  --win: #ffd23f;
+  --lose: #ff6b7d;
+  --f-display: "Dela Gothic One", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --f-body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --f-dot: "DotGothic16", "MS Gothic", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--night);
+  color: var(--fg);
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.6;
+  padding-block: 20px 40px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.eyebrow { font-family: var(--f-dot); color: var(--muted); letter-spacing: .12em; font-size: 13px; margin: 0; }
+h1 { font-family: var(--f-display); font-weight: 400; font-size: clamp(30px, 9vw, 42px); line-height: 1.15; margin: 4px 0 8px; text-wrap: balance; }
+.rec { margin: 0; color: var(--muted); }
+.rec b { color: var(--fg); font-family: var(--f-dot); font-weight: 400; font-size: 18px; letter-spacing: .03em; }
+
+.board { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+.board table { width: 100%; table-layout: fixed; border-collapse: collapse; font-family: var(--f-dot); }
+.board th, .board td { text-align: center; padding: 6px 0; font-weight: 400; font-size: 15px; border-bottom: 1px solid var(--line); }
+.board thead th { color: var(--muted); font-size: 12px; }
+.board tr:last-child td { border-bottom: 0; }
+.board th.team, .board td.team { width: 5.4em; text-align: left; padding-left: 2px; white-space: nowrap; overflow: hidden; }
+.board td.team { color: var(--fg); font-size: 14px; }
+.board td.team.me { color: var(--dragon); filter: brightness(1.5); }
+.board th.r, .board td.r { width: 2.4em; color: var(--win); font-size: 18px; border-left: 1px solid var(--line); }
+.board td.inn { color: var(--fg); }
+.board td.inn.zero { color: var(--muted); }
+.board td.inn.cur { background: rgba(42, 115, 255, .28); }
+
+.result {
+  min-height: 112px; display: grid; place-items: center; text-align: center;
+  border: 1px dashed var(--line); border-radius: 6px; padding: 12px;
+}
+.result .big { font-family: var(--f-display); font-size: clamp(44px, 14vw, 68px); line-height: 1.1; margin: 0; }
+.result .sub { margin: 4px 0 0; color: var(--muted); font-size: 14px; }
+.result.idle .big { font-size: 22px; color: var(--muted); font-family: var(--f-body); font-weight: 700; }
+.result.live .big { color: var(--muted); font-size: 26px; font-family: var(--f-dot); letter-spacing: .1em; }
+.result.win { border: 1px solid var(--win); background: rgba(255, 210, 63, .08); }
+.result.win .big { color: var(--win); }
+.result.lose { border: 1px solid var(--lose); background: rgba(255, 107, 125, .07); }
+.result.lose .big { color: var(--lose); }
+.result.pop .big { animation: pop .45s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes pop { from { transform: scale(.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+button {
+  font-family: var(--f-display); font-size: 20px; letter-spacing: .04em; cursor: pointer;
+  border: 0; border-radius: 6px; padding: 16px 18px; min-height: 56px;
+  background: var(--dragon); color: #fff; width: 100%;
+  box-shadow: 0 4px 0 #14378a;
+}
+button:active:not(:disabled) { transform: translateY(3px); box-shadow: 0 1px 0 #14378a; }
+button:disabled { opacity: .55; cursor: default; }
+button:focus-visible { outline: 3px solid var(--win); outline-offset: 3px; }
+button.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); box-shadow: none; font-size: 16px; min-height: 48px; padding: 12px; font-family: var(--f-body); font-weight: 700; }
+button.ghost:active:not(:disabled) { transform: none; background: var(--panel); }
+
+.stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.stats div { background: var(--panel); border-radius: 6px; padding: 10px 12px; min-width: 0; }
+.stats dt { color: var(--muted); font-size: 12px; margin: 0; }
+.stats dd { margin: 0; font-family: var(--f-dot); font-size: 22px; font-variant-numeric: tabular-nums; }
+.stats .wide { grid-column: 1 / -1; }
+.bar { height: 8px; background: var(--night); border-radius: 4px; margin-top: 6px; position: relative; overflow: hidden; }
+.bar i { position: absolute; inset: 0 auto 0 0; background: var(--dragon); width: 0; transition: width .3s; }
+.bar u { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--win); text-decoration: none; }
+.hint { font-size: 12px; color: var(--muted); margin: 4px 0 0; }
+
+.season { display: flex; flex-direction: column; gap: 10px; }
+.season output { display: block; min-height: 3.2em; color: var(--fg); }
+.season output b { font-family: var(--f-dot); font-weight: 400; font-size: 20px; color: var(--win); }
+.foot { font-size: 12px; color: var(--muted); margin: 0; }
+.foot a { color: var(--muted); }
+.fx { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 20; }
+.fx i { position: absolute; left: 50%; top: 42%; border-radius: 1px; }
+.callout { position: absolute; left: 0; right: 0; top: 26%; text-align: center; padding: 0 16px; animation: callout 2s ease-out forwards; }
+.callout b { display: block; font-family: var(--f-display); font-weight: 400; font-size: clamp(40px, 13vw, 72px); line-height: 1.1; color: var(--win); text-shadow: 0 3px 0 #7a5a00, 0 0 24px rgba(255, 210, 63, .6); }
+.callout span { display: block; font-family: var(--f-display); font-size: clamp(16px, 5vw, 24px); color: #fff; text-shadow: 0 2px 0 #000; margin-top: 6px; }
+.callout.t3 b { color: #fff; text-shadow: 0 3px 0 #c2410c, 0 0 30px #ffd23f, 0 0 60px #ff8a1f; }
+.callout.t4 b { font-size: clamp(44px, 15vw, 84px); background: linear-gradient(#fff6b0, #ffd23f 50%, #ff8a1f); -webkit-background-clip: text; background-clip: text; color: transparent; text-shadow: none; filter: drop-shadow(0 3px 0 #7a2e00) drop-shadow(0 0 22px rgba(255, 170, 40, .8)); }
+.callout.lose b { color: var(--lose); text-shadow: 0 3px 0 #4a0f1a, 0 0 20px rgba(255, 107, 125, .5); }
+.flash { position: absolute; inset: 0; background: radial-gradient(circle at 50% 40%, rgba(255, 210, 63, .55), transparent 65%); animation: flash .8s ease-out forwards; }
+.flash.dark { background: radial-gradient(circle at 50% 50%, transparent 35%, rgba(255, 60, 90, .38)); }
+@keyframes callout {
+  0% { transform: scale(.3) rotate(-4deg); opacity: 0; }
+  14% { transform: scale(1.18) rotate(2deg); opacity: 1; }
+  24% { transform: scale(1) rotate(0); }
+  80% { transform: scale(1); opacity: 1; }
+  100% { transform: scale(1.06); opacity: 0; }
+}
+@keyframes flash { from { opacity: 1; } to { opacity: 0; } }
+@keyframes shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-7px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(3px); } }
+.wrap.shake { animation: shake .5s; }
+@media (prefers-reduced-motion: reduce) { .result.pop .big { animation: none; } .bar i { transition: none; } .callout { animation: none; } .wrap.shake { animation: none; } }
+</style>
+
+</head>
+<body>
+<main class="wrap">
+  <header>
+    <p class="eyebrow">2026 CHUNICHI DRAGONS</p>
+    <h1>中日勝率ガチャ</h1>
+    <p class="rec">2026年の最終成績 <b>60勝 81敗 2分</b>。勝つ確率は <b>42.6%</b>。</p>
+  </header>
+
+  <section class="board" aria-label="スコアボード">
+    <table>
+      <thead>
+        <tr><th class="team"></th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th><th>8</th><th>9</th><th class="r">R</th></tr>
+      </thead>
+      <tbody>
+        <tr id="rowOpp"></tr>
+        <tr id="rowMe"></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section id="result" class="result idle" aria-live="polite">
+    <div><p class="big">試合を始めよう</p></div>
+  </section>
+
+  <button id="play" type="button">試合開始</button>
+
+  <dl class="stats">
+    <div><dt>通算</dt><dd id="sGames">0戦</dd></div>
+    <div><dt>勝ち / 負け</dt><dd id="sWL">0 - 0</dd></div>
+    <div><dt>いまの流れ</dt><dd id="sStreak">-</dd></div>
+    <div><dt>最長連勝</dt><dd id="sBest">0</dd></div>
+    <div class="wide">
+      <dt>あなたの勝率 <span id="sRate">-</span>(金の線は本物の.426)</dt>
+      <dd class="bar" aria-hidden="true"><i id="barFill"></i><u id="barMark"></u></dd>
+    </div>
+  </dl>
+
+  <section class="season">
+    <button id="season" class="ghost" type="button">143試合を一気に回す</button>
+    <output id="seasonOut">2026年は60勝81敗でした。あなたのシーズンはどうなる?</output>
+    <button id="reset" class="ghost" type="button">記録をリセット</button>
+  </section>
+
+  <p class="foot">勝率は引き分けを除いた 60 ÷ (60+81) で計算しています。最終成績は <a href="https://www.baseballchannel.jp/npb/294047/" target="_blank" rel="noopener">ベースボールチャンネルの記事</a> によるものです。得点や対戦相手は毎回ランダムに作った演出で、実際の試合とは関係ありません。お金は賭けません。</p>
+</main>
+
+<script>
+(function () {
+  var P = 60 / 141;
+  var OPP = ["阪神", "巨人", "ヤクルト", "DeNA", "広島"];
+  var KEY = "chunichi-gacha-v1";
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var $ = function (id) { return document.getElementById(id); };
+  var state = { w: 0, l: 0, streakType: "", streak: 0, bestW: 0 };
+  var busy = false;
+
+  var fx = document.createElement("div");
+  fx.className = "fx";
+  fx.setAttribute("aria-hidden", "true");
+  document.body.appendChild(fx);
+
+  var GOLD = ["#ffd23f", "#ffb400", "#ffffff", "#2a73ff", "#7fb0ff"];
+  function burst(n, power) {
+    if (reduce) return;
+    for (var k = 0; k < n; k++) {
+      var p = document.createElement("i");
+      var s = 6 + Math.random() * 8;
+      p.style.cssText = "width:" + s + "px;height:" + (s * 0.6) + "px;background:" + GOLD[k % GOLD.length];
+      fx.appendChild(p);
+      var ang = Math.random() * Math.PI * 2;
+      var d = (80 + Math.random() * 180) * power;
+      var dx = Math.cos(ang) * d;
+      var dy = Math.sin(ang) * d - 120 * power;
+      var a = p.animate([
+        { transform: "translate(0,0) rotate(0deg)", opacity: 1 },
+        { transform: "translate(" + dx + "px," + dy + "px) rotate(" + (Math.random() * 720 - 360) + "deg)", opacity: 1, offset: 0.55 },
+        { transform: "translate(" + (dx * 1.1) + "px," + (dy + 280) + "px) rotate(" + (Math.random() * 720 - 360) + "deg)", opacity: 0 }
+      ], { duration: 1100 + Math.random() * 800, easing: "cubic-bezier(.2,.7,.4,1)" });
+      a.onfinish = (function (el) { return function () { el.remove(); }; })(p);
+    }
+  }
+  function flash(dark) {
+    if (reduce) return;
+    var f = document.createElement("div");
+    f.className = "flash" + (dark ? " dark" : "");
+    fx.appendChild(f);
+    setTimeout(function () { f.remove(); }, 900);
+  }
+  function callout(text, sub, cls) {
+    var c = document.createElement("div");
+    c.className = "callout " + cls;
+    c.innerHTML = "<b>" + text + "</b>" + (sub ? "<span>" + sub + "</span>" : "");
+    fx.appendChild(c);
+    setTimeout(function () { c.remove(); }, 2000);
+  }
+  function shake() {
+    if (reduce) return;
+    var w = document.querySelector(".wrap");
+    w.classList.remove("shake");
+    void w.offsetWidth;
+    w.classList.add("shake");
+  }
+  var WIN_SUB = ["", "流れが来てる", "いい波が来た", "波に乗った!", "優勝ペース!!"];
+  var LOSE_SUB = ["", "雲行きが怪しい", "暗黒期に突入", "もはや伝説"];
+  function celebrate(win) {
+    var n = state.streak;
+    if (win) {
+      var tier = n >= 10 ? 4 : n >= 5 ? 3 : n >= 3 ? 2 : n >= 2 ? 1 : 0;
+      burst([26, 50, 85, 140, 240][tier], [0.8, 1, 1.2, 1.5, 1.9][tier]);
+      if (tier >= 2) flash(false);
+      if (tier >= 1) {
+        var best = n === state.bestW && n >= 2;
+        var sub = best ? "自己最長連勝!" : WIN_SUB[tier];
+        callout(n + "連勝" + "!".repeat(Math.min(tier, 3)), sub, "t" + Math.max(tier - 1, 1));
+      }
+    } else {
+      var lt = n >= 10 ? 3 : n >= 5 ? 2 : n >= 3 ? 1 : 0;
+      if (lt >= 1) {
+        flash(true);
+        shake();
+        callout(n + "連敗…", LOSE_SUB[lt], "lose");
+      }
+    }
+  }
+
+  try { var saved = JSON.parse(localStorage.getItem(KEY) || "null"); if (saved && typeof saved.w === "number") state = saved; } catch (e) {}
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  function emptyRow(el, name, me) {
+    var h = '<td class="team' + (me ? ' me' : '') + '">' + name + '</td>';
+    for (var i = 0; i < 9; i++) h += '<td class="inn zero">-</td>';
+    h += '<td class="r">0</td>';
+    el.innerHTML = h;
+  }
+  function distribute(total) {
+    var a = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+    for (var i = 0; i < total; i++) a[Math.floor(Math.random() * 9)]++;
+    return a;
+  }
+  function pct(x) { return "." + String(Math.round(x * 1000)).padStart(3, "0"); }
+
+  function renderStats() {
+    var g = state.w + state.l;
+    $("sGames").textContent = g + "戦";
+    $("sWL").textContent = state.w + " - " + state.l;
+    $("sStreak").textContent = state.streak ? state.streak + (state.streakType === "w" ? "連勝" : "連敗") : "-";
+    $("sBest").textContent = state.bestW + "連勝";
+    var rate = g ? state.w / g : 0;
+    $("sRate").textContent = g ? pct(rate) : "-";
+    $("barFill").style.width = (rate * 100) + "%";
+    $("barMark").style.left = (P * 100) + "%";
+  }
+
+  function setResult(cls, big, sub) {
+    var r = $("result");
+    r.className = "result " + cls;
+    r.innerHTML = '<div><p class="big">' + big + '</p>' + (sub ? '<p class="sub">' + sub + '</p>' : '') + '</div>';
+  }
+
+  function record(win) {
+    if (win) state.w++; else state.l++;
+    var t = win ? "w" : "l";
+    state.streak = state.streakType === t ? state.streak + 1 : 1;
+    state.streakType = t;
+    if (t === "w" && state.streak > state.bestW) state.bestW = state.streak;
+    save();
+  }
+
+  function playGame() {
+    if (busy) return;
+    busy = true;
+    $("play").disabled = true;
+    var win = Math.random() < P;
+    var opp = OPP[Math.floor(Math.random() * OPP.length)];
+    var hi = 2 + Math.floor(Math.random() * 7);
+    var lo = Math.floor(Math.random() * hi);
+    var meRuns = distribute(win ? hi : lo);
+    var oppRuns = distribute(win ? lo : hi);
+    var rowMe = $("rowMe"), rowOpp = $("rowOpp");
+    emptyRow(rowOpp, opp, false);
+    emptyRow(rowMe, "中日", true);
+    setResult("live", "試合中...", "");
+    var i = 0, sumMe = 0, sumOpp = 0;
+    var step = reduce ? 30 : 260;
+    function tick() {
+      if (i >= 9) { finish(); return; }
+      var cm = rowMe.children[i + 1], co = rowOpp.children[i + 1];
+      cm.textContent = meRuns[i]; co.textContent = oppRuns[i];
+      cm.className = "inn cur" + (meRuns[i] ? "" : " zero");
+      co.className = "inn cur" + (oppRuns[i] ? "" : " zero");
+      if (i > 0) { rowMe.children[i].classList.remove("cur"); rowOpp.children[i].classList.remove("cur"); }
+      sumMe += meRuns[i]; sumOpp += oppRuns[i];
+      rowMe.lastChild.textContent = sumMe; rowOpp.lastChild.textContent = sumOpp;
+      i++;
+      setTimeout(tick, step);
+    }
+    function finish() {
+      rowMe.children[9].classList.remove("cur"); rowOpp.children[9].classList.remove("cur");
+      record(win);
+      setResult((win ? "win" : "lose") + " pop", win ? "勝利!" : "敗北…", "中日 " + sumMe + " - " + sumOpp + " " + opp);
+      renderStats();
+      celebrate(win);
+      busy = false;
+      $("play").disabled = false;
+    }
+    tick();
+  }
+
+  function playSeason() {
+    var w = 0;
+    for (var i = 0; i < 143; i++) if (Math.random() < P) w++;
+    var l = 143 - w;
+    var diff = w - 60;
+    var cmp = diff > 0 ? "本物より" + diff + "勝多い" : diff < 0 ? "本物より" + (-diff) + "勝少ない" : "本物と同じ勝ち数";
+    $("seasonOut").innerHTML = "あなたのシーズンは <b>" + w + "勝" + l + "敗</b>(勝率" + pct(w / 143) + ")。" + cmp + "です。";
+  }
+
+  function reset() {
+    state = { w: 0, l: 0, streakType: "", streak: 0, bestW: 0 };
+    save(); renderStats();
+    emptyRow($("rowOpp"), "相手", false); emptyRow($("rowMe"), "中日", true);
+    setResult("idle", "試合を始めよう", "");
+    $("seasonOut").textContent = "2026年は60勝81敗でした。あなたのシーズンはどうなる?";
+  }
+
+  $("play").addEventListener("click", playGame);
+  $("season").addEventListener("click", playSeason);
+  $("reset").addEventListener("click", reset);
+  emptyRow($("rowOpp"), "相手", false);
+  emptyRow($("rowMe"), "中日", true);
+  renderStats();
+})();
+</script>
+
+</body>
+</html>
